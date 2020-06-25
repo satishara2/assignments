@@ -1,0 +1,122 @@
+## correct the string file
+
+create table `cp-gsso-prod-gtnanalytics.PRIMARY_DATA.tbl_STEP_ver2` as
+SELECT 
+SAFE_CAST (Month as int64) as Month,
+SAFE_CAST ( Year as int64) as Year,
+SAFE_CAST (StockistCodey as int64) as stockist_code,
+nullif (OtherPayoutCondonationValue1,0) as Condonation_Value, 
+Payout1, 
+IfBrandSpecific as BrandSpecific, BrandName,
+OverallSTT, OverallToothpaste, 
+PPGCode, PPGDesc, PPGSpecific,
+REType, REspecific,
+Parameter,
+FROM `cp-gsso-prod-gtnanalytics.PRIMARY_DATA.tbl_STEP` 
+
+## Parameter -1
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_Parameter1 as
+select distinct Month, Year, Stockist_Code, State, 
+
+Overall_STT_Yes_No1, Overall_Toothpaste_Yes_No1, 
+Brand_Specific_Yes_No1, Brand_Name1, PPG_Specific_Yes_No1, 
+PPG_Code1, PPG_Desc1, RE_specific_Yes_No1, RE_Type1, 
+
+Parameter1_Payout,
+Condonation_Value
+from
+cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_DF
+
+## parameter -2
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_Parameter2 as
+select distinct Month, Year, Stockist_Code, State, 
+
+Overall_STT_Yes_No2, Overall_Toothpaste_Yes_No2, 
+Brand_Specific_Yes_No2, Brand_Name2, PPG_Specific_Yes_No2, 
+PPG_Code2, PPG_Desc2, RE_specific_Yes_No2, RE_Type2, 
+
+Parameter2_Payout,
+Condonation_Value
+from
+cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_DF
+
+## Parameter -3
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_Parameter3 as
+select distinct Month, Year, Stockist_Code, State, 
+
+Parameter3_Desc, Overall_STT_Yes_No3, Overall_Toothpaste_Yes_No3, 
+Brand_Specific_Yes_No3, Brand_Name3, PPG_Specific_Yes_No3, 
+PPG_Code3, PPG_Desc3, RE_specific_Yes_No3, RE_Type3,
+
+Parameter3_Payout ,
+Condonation_Value
+from
+cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_DF
+
+
+## parameter -4
+
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_Parameter4 as
+select distinct Month, Year, Stockist_Code, State, 
+Parameter4_Desc, Overall_STT_Yes_No4, Overall_Toothpaste_Yes_No4, 
+Brand_Specific_Yes_No4, Brand_Name4, PPG_Specific_Yes_No4, 
+PPG_Code4, PPG_Desc4, RE_specific_Yes_No4, RE_Type4,
+Parameter4_Payout,
+Condonation_Value
+from
+cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_DF
+
+
+-------------------------parameter -1 ----------------------------------------------------
+## base file for parameter-1
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_1 as
+select 
+a.Overall_STT_Yes_No1,	a.Overall_Toothpaste_Yes_No1	,
+a.Brand_Specific_Yes_No1	,a.Brand_Name1	,a.PPG_Specific_Yes_No1	,
+a.PPG_Code1, a.PPG_Desc1	,a.RE_specific_Yes_No1	,a.RE_Type1	,a.Parameter1_Payout,a. Condonation_Value,
+b.*
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter1_update a
+right join cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_base b
+on a.Stockist_Code=b.stockist_CAP_code and a.month=b.month2 and a.year=b.year2
+
+## take this at overall level
+
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_para_1_overall as 
+select stockist_CAP_code,
+year2, month2,
+round(avg(Parameter1_Payout),0) as Overall_Parameter1_Payout,
+round(avg(Condonation_Value),0) as overall_Condonation_P1,
+round(sum(CONDITION_VALUE),0) as Overall_ASP 
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_1
+where Overall_STT_Yes_No1=true
+group by stockist_CAP_code,year2,month2
+order by stockist_CAP_code,year2,month2
+
+## take this at brand level
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_para_1_brand as 
+select stockist_CAP_code,
+year2, month2,
+round(avg(Parameter1_Payout),0) as Overall_Parameter1_Payout,
+round(avg(Condonation_Value),0) as overall_Condonation_P1,
+round(sum(CONDITION_VALUE),0) as Overall_ASP ,
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_1
+where Brand_Specific_Yes_No1=true and RE_specific_Yes_No1=false
+group by stockist_CAP_code,year2,month2
+order by stockist_CAP_code,year2,month2
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

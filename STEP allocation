@@ -252,7 +252,7 @@ group by stockist_code,year2,month2,Brand_Name2
 order by stockist_code,year2,month2,Brand_Name2
 
 ## get right data for PPG
-## identify the right data for brand
+
 create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_2_PPG_df as
 select year2, month2,Parameter2_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, PPG_Code2,
 from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_2
@@ -306,7 +306,129 @@ from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_2_RE_df_corr
 group by stockist_code,year2,month2,RE_Type2
 order by stockist_code,year2,month2,RE_Type2
 
+
 ------------------------------------------------------PARAMETER-3 -----------------------------------------------------------
+
+## base file for parameter-2
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3 as select 
+A.Overall_STT_Yes_No3,A.Brand_Specific_Yes_No3, A.Brand_Name3, A.PPG_Specific_Yes_No3, 
+A.PPG_Code3, A.RE_specific_Yes_No3, A.RE_Type3, A.Parameter3_Payout,A.Condonation_Value,b.*
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter3_update a
+right join cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_base b on a.Stockist_Code=b.stockist_code and a.month=b.month2 and a.year=b.year2
+
+## to take this at overall level
+
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_para_3_overall as 
+select stockist_code,
+year2, month2,
+round(avg(Parameter3_Payout),0) as Overall_Parameter3_Payout,
+round(avg(Condonation_Value),0) as overall_Condonation_P3,
+round(sum(CONDITION_VALUE),0) as Overall_ASP 
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3
+where Overall_STT_Yes_No3=true
+group by stockist_code,year2,month2
+order by stockist_code,year2,month2
+
+## get right data for the brand
+
+## identify the right data for brand
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_brand_df as
+select year2, month2,Parameter3_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, Brand_Name3,
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3
+where Brand_Specific_Yes_No3=true
+
+## CORRECTING the brand data
+
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_brand_df_corr as
+(select 
+year2, month2,Parameter3_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, UPPER(TRIM(Brand_Name3)) AS Brand_Name3,
+FROM (select 
+year2, month2,Parameter3_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, SPLIT (Brand_Name3,',') AS Brand_Name3,
+FROM cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_brand_df) A
+cross join unnest (Brand_Name3) as Brand_Name3)
+
+
+## allocation of brand data
+## brand level allocation 
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_para_3_brand as 
+select stockist_code,
+year2, month2,
+round(avg(Parameter3_Payout),0) as Overall_Parameter3_Payout,
+round(avg(Condonation_Value),0) as overall_Condonation_P3,
+round(sum(CONDITION_VALUE),0) as Overall_ASP ,Brand_Name3
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_brand_df_corr
+group by stockist_code,year2,month2,Brand_Name3
+order by stockist_code,year2,month2,Brand_Name3
+
+## brand name correction 
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_para_3_brand2 as
+select a.string_field_1 as Brand_Name_3,
+b.*
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.BRAND_CORRECTION_27 a
+right join cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_para_3_brand b
+on b.Brand_Name3=a.string_field_0
+
+## get right data for PPG mapping 
+
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_PPG_df as
+select year2, month2,Parameter3_Payout,
+Condonation_Value,CONDITION_VALUE,stockist_code, PPG_Code3,
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3
+where PPG_Specific_Yes_No3=true
+
+## correct the PPG data
+
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_PPG_df_corr as
+(select 
+year2, month2,Parameter3_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, UPPER(TRIM(PPG_Code3)) AS PPG_Code3,
+FROM (select 
+year2, month2,Parameter3_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, SPLIT (PPG_Code3,',') AS PPG_Code3,
+FROM cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_PPG_df) A
+cross join unnest (PPG_Code3) as PPG_Code3)
+
+## allocate the PPG
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_para_3_PPG as 
+select stockist_code,
+year2, month2,
+round(avg(Parameter3_Payout),0) as Overall_Parameter3_Payout,
+round(avg(Condonation_Value),0) as overall_Condonation_P3,
+round(sum(CONDITION_VALUE),0) as Overall_ASP ,PPG_Code3
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_PPG_df_corr
+group by stockist_code,year2,month2,PPG_Code3
+order by stockist_code,year2,month2,PPG_Code3
+
+## get the right data for RE
+
+
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_RE_df1 as
+select year2, month2,Parameter3_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, RE_Type3,PPG_Specific_Yes_No3,PPG_Code3
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3
+where RE_specific_Yes_No3='Yes' 
+
+## data correction for RE
+
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_RE_df_corr1 as
+select 
+year2, month2,Parameter3_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, UPPER(TRIM(RE_Type3)) AS RE_Type3,PPG_Specific_Yes_No3
+FROM (select 
+year2, month2,Parameter3_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, SPLIT (RE_Type3,',') AS RE_Type3,PPG_Specific_Yes_No3,
+FROM cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_RE_df1
+where PPG_Specific_Yes_No3=false) A
+cross join unnest (RE_Type3) as RE_Type3
+
+
+
+## allocation of the RE
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_para_3_RE as 
+select stockist_code,
+year2, month2,
+round(avg(Parameter3_Payout),0) as Overall_Parameter3_Payout,
+round(avg(Condonation_Value),0) as overall_Condonation_P3,
+round(sum(CONDITION_VALUE),0) as Overall_ASP ,RE_Type3
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_RE_df_corr1
+group by stockist_code,year2,month2,RE_Type3
+order by stockist_code,year2,month2,RE_Type3
+
 
 
 

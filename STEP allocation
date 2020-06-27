@@ -309,7 +309,7 @@ order by stockist_code,year2,month2,RE_Type2
 
 ------------------------------------------------------PARAMETER-3 -----------------------------------------------------------
 
-## base file for parameter-2
+## base file for parameter-3
 create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3 as select 
 A.Overall_STT_Yes_No3,A.Brand_Specific_Yes_No3, A.Brand_Name3, A.PPG_Specific_Yes_No3, 
 A.PPG_Code3, A.RE_specific_Yes_No3, A.RE_Type3, A.Parameter3_Payout,A.Condonation_Value,b.*
@@ -429,30 +429,66 @@ from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_3_RE_df_corr1
 group by stockist_code,year2,month2,RE_Type3
 order by stockist_code,year2,month2,RE_Type3
 
+-------------------------------------------------------------------------Parameter 4-------------------------------------------------
+
+## base file for parameter-4
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_4 as 
+select 
+A.Overall_STT_Yes_No4,A.Brand_Specific_Yes_No4, A.Brand_Name4, A.PPG_Specific_Yes_No4, 
+A.PPG_Code4, A.RE_specific_Yes_No4, A.RE_Type4, A.Parameter4_Payout,A.Condonation_Value,b.*
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter4_update a
+right join cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_base b on a.Stockist_Code=b.stockist_code and a.month=b.month2 and a.year=b.year2
+
+## to take this at overall level
+
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_para_4_overall as 
+select stockist_code,
+year2, month2,
+round(avg(Parameter4_Payout),0) as Overall_Parameter4_Payout,
+round(avg(Condonation_Value),0) as overall_Condonation_P4,
+round(sum(CONDITION_VALUE),0) as Overall_ASP 
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_4
+where Overall_STT_Yes_No4=true
+group by stockist_code,year2,month2
+order by stockist_code,year2,month2
 
 
+## identify the right data for brand
+
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_4_brand_df as
+select year2, month2,Parameter4_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, Brand_Name4,
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_4
+where Brand_Specific_Yes_No4=true
+
+## CORRECTING the brand data
+
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_4_brand_df_corr as
+(select 
+year2, month2,Parameter4_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, UPPER(TRIM(Brand_Name4)) AS Brand_Name4,
+FROM (select 
+year2, month2,Parameter4_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, SPLIT (Brand_Name4,',') AS Brand_Name4,
+FROM cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_4_brand_df) A
+cross join unnest (Brand_Name4) as Brand_Name4)
 
 
+## allocation of brand data
+## brand level allocation 
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_para_4_brand as 
+select stockist_code,
+year2, month2,
+round(avg(Parameter4_Payout),0) as Overall_Parameter4_Payout,
+round(avg(Condonation_Value),0) as overall_Condonation_P4,
+round(sum(CONDITION_VALUE),0) as Overall_ASP ,Brand_Name4
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_4_brand_df_corr
+group by stockist_code,year2,month2,Brand_Name4
+order by stockist_code,year2,month2,Brand_Name4
+
+##BRAND NAME CORRECTION 
+
+update cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_para_4_brand
+set Brand_Name4='SWARNA VEDSHAKTI'
+where Brand_Name4='SVS'
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+## get right data for PPG
 

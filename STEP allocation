@@ -492,3 +492,34 @@ where Brand_Name4='SVS'
 
 ## get right data for PPG
 
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_4_PPG_df as
+select year2, month2,Parameter4_Payout,
+Condonation_Value,CONDITION_VALUE,stockist_code, PPG_Code4,
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_4
+where PPG_Specific_Yes_No4=true
+
+## correct the PPG data
+
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_4_PPG_df_corr as
+(select 
+year2, month2,Parameter4_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, UPPER(TRIM(PPG_Code4)) AS PPG_Code4,
+FROM (select 
+year2, month2,Parameter4_Payout,Condonation_Value,CONDITION_VALUE,stockist_code, SPLIT (PPG_Code4,',') AS PPG_Code4,
+FROM cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_4_PPG_df) A
+cross join unnest (PPG_Code4) as PPG_Code4)
+
+## allocate the PPG
+create table cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_para_4_PPG as 
+select stockist_code,
+year2, month2,
+round(avg(Parameter4_Payout),0) as Overall_Parameter4_Payout,
+round(avg(Condonation_Value),0) as overall_Condonation_P4,
+round(sum(CONDITION_VALUE),0) as Overall_ASP ,PPG_Code4
+from cp-gsso-prod-gtnanalytics.PRIMARY_DATA.STEP_parameter_4_PPG_df_corr
+group by stockist_code,year2,month2,PPG_Code4
+order by stockist_code,year2,month2,PPG_Code4
+
+
+
+
+

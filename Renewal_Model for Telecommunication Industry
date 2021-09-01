@@ -1,0 +1,516 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jan 28 20:04:02 2021
+
+@author: adhiman
+"""
+
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jan 22 12:17:29 2021
+
+@author: pjhamb
+"""
+
+
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Dec 17 02:39:46 2020
+
+@author: pjhamb
+"""
+
+
+
+def dataset_read(path):
+    mov = pd.read_csv(path)
+    return mov
+
+
+def feature_selection(mov, variable_selection_file_path):
+    var_df = pd.read_csv(variable_selection_file_path)
+    var_df = var_df[var_df['Variable_Selection'] == "Yes"]
+    
+    columns_selected = [i.lower() for i in var_df['MOV_Variable']]
+    column_names = [i for i in var_df['Variable Name']]
+    
+    mov = mov[columns_selected]
+    mov.columns = column_names
+     
+    return mov
+
+def data_alteration(mov):
+    random.seed(989)
+    import datetime
+    from datetime import timedelta  
+    import datetime
+    
+    
+    mov['AON'] =  mov['AON'].apply(lambda x: x.rstrip(' days'))
+    mov['AON'] = pd.to_numeric(mov['AON'])
+   
+    
+    return mov
+
+
+
+def divide_test_train(mov_df,target_variable,train_fraction, validation_fraction):
+    test_fraction = 1 - (train_fraction + validation_fraction)
+    mov_df.reset_index(drop=True, inplace=True)
+   
+    mov_df = mov_df.dropna(axis=1)
+    #mov_df = mov_df.replace('nan', np.nan).fillna(0)
+    mov_df = pd.get_dummies(mov_df)
+    ## divide into train, validation and test
+    train_data, val_data, test_data = np.split(mov_df.sample(frac=1, random_state=42), 
+                       [int(train_fraction*len(mov_df)), int((train_fraction + validation_fraction)*len(mov_df))])
+    
+    ## identifying minority class
+    minority_class = majority_class = "None"
+    freq_cross_tab = train_data[target_variable].value_counts()
+    if freq_cross_tab[0]/ freq_cross_tab[1] < 0.9 :
+        minority_class = 0
+        majority_class = 1
+    elif freq_cross_tab[1]/freq_cross_tab[0] < 0.9 :
+        minority_class = 1
+        majority_class = 0
+
+
+    if minority_class != "None":
+        ##balance the , train data by taking same rows as minority class for majority class
+        train_minority = train_data[train_data[target_variable] == minority_class]
+        train_majority = train_data[train_data[target_variable] == majority_class]
+        train_majority = train_majority.sample(n=6*(train_minority.shape[0]),replace=False,random_state= 0) 
+        
+        #train_majority[target_variable].value_counts()
+        #train_minority[target_variable].value_counts()
+
+        train_data = train_majority.append(train_minority)
+        #train_data[target_variable].value_counts()
+    
+    X_train = train_data.drop(columns=[target_variable])
+    Y_train = train_data[target_variable]
+    
+    X_val = val_data.drop(columns=[target_variable])
+    Y_val = val_data[target_variable]
+    
+    
+    X_test = test_data.drop(columns=[target_variable])
+    Y_test = test_data[target_variable]
+    
+    X_train.reset_index(drop=True, inplace=True)
+    Y_train.reset_index(drop=True, inplace=True)
+    X_val.reset_index(drop=True, inplace=True)
+    Y_val.reset_index(drop=True, inplace=True)
+    X_test.reset_index(drop=True, inplace=True)
+    Y_test.reset_index(drop=True, inplace=True)
+    
+    return(X_train,Y_train,X_val, Y_val,  X_test, Y_test)
+    
+
+
+def impute_missing_value(df, target_variable): ## add missing criteria
+    for col in df.columns:
+        if col != target_variable:  ## not imputing target variable
+            if df[col].isnull().any():
+                missing_value_count = df[col].isnull().sum()
+                total_values = df[col].shape[0]
+                missing_value_percent = missing_value_count / total_values * 100
+                
+                count_unique_val = df[col].nunique()
+                
+                if missing_value_percent > 20:
+                    df.drop([col], axis = 1) 
+                    print(" Dropped column "+col +" having missing data percent : "+ str(missing_value_percent) + " %") 
+                
+                elif missing_value_percent < 20:
+                    if (df[col].dtype) == float:
+                        df[col].fillna((df[col].mean()), inplace=True) ## replacing by mean
+                        
+                    elif (df[col].dtype) in [int,bool]:  ## replacing for integer and string
+                        df[col].fillna((df[col].mode()), inplace=True) 
+                        
+                    #elif (df[col].dtype) == 'category':
+                    #    df[col].fillna((df[col].mode()), inplace=True) 
+                        
+                    elif np.issubdtype(df[col].dtype, np.datetime64): ## replacing for datetime
+                        if count_unique_val > 50:  ## if greater than 50, replacing with prev val
+                            df[col].ffill(axis = 0, inplace=True) 
+                        else:  ## if less than 50, replace with mode
+                            df[col].fillna((df[col].mode()), inplace=True) 
+     
+    ## removing rows which have NAs in target variable. No imputation for target variable                   
+    df = df[df[target_variable].notna()]  
+                        
+    return df
+
+
+def pickling_model(model_name, ml_model , path_of_model):    
+    # save the model to disk
+    model_path = path_of_model
+    #filename = 'rf_model_1.sav'
+    filename = str(model_name) + ".sav"
+    pickle.dump(ml_model, open(path_of_model+"/"+filename, 'wb'))
+    print("Model "+filename +" written to disk")
+
+
+
+def model_run_random_forest(n_estimator, min_sam_split,criterion_eval , max_features_taken, X_train_rf, Y_train_rf, X_val_rf, Y_val_rf, pred_threshold, model_id):
+    rf_model = RandomForestRegressor(n_estimators=n_estimator,min_samples_split=min_sam_split , criterion=criterion_eval, 
+                      max_features=max_features_taken, min_samples_leaf=1, min_weight_fraction_leaf=0.0, 
+                      min_impurity_decrease=0.0, bootstrap=True, oob_score=False,
+                      random_state=0, verbose=0, warm_start=False)
+
+    rf_model.fit(X_train_rf, Y_train_rf)
+
+    predictions = rf_model.predict(X_val_rf)
+    predictions[predictions >= pred_threshold] = 1
+    predictions[predictions <  pred_threshold] = 0
+
+    recall_score = sklearn.metrics.recall_score(Y_val_rf,predictions)
+    accuracy = sklearn.metrics.accuracy_score(Y_val_rf,predictions)
+    
+    pickling_model(model_id,rf_model,model_write_path)
+    
+    return [model_id,accuracy ,recall_score,{"n_estimators":n_estimator,
+                                             "min_samples_split":min_sam_split,
+                                             "criterion":criterion_eval,
+                                             "max_features": max_features_taken,
+                                             "prediction_threshold" : pred_threshold} ]
+
+
+    
+def model_run_LogisticRegression(penalty_type , solver_type , max_iterations, X_train_log, Y_train_log, X_val_log, Y_val_log, pred_threshold, model_id):
+
+
+    log_reg_model = LogisticRegression(penalty=penalty_type,  dual=False, tol=0.0001, C=1.0,
+                                 fit_intercept=True, intercept_scaling=1,
+                                 random_state=0, solver=solver_type, max_iter=max_iterations, 
+                                 multi_class='ovr', verbose=0, warm_start=False)
+    log_reg_model.fit(X_train_log, Y_train_log)
+    
+    predictions = log_reg_model.predict(X_val_log)
+    predictions[predictions >= pred_threshold] = 1
+    predictions[predictions <  pred_threshold] = 0
+     
+    recall_score = sklearn.metrics.recall_score(Y_val_log,predictions)
+    accuracy = sklearn.metrics.accuracy_score(Y_val_log,predictions)
+    pickling_model(model_id,log_reg_model,model_write_path)
+    
+    return [model_id,accuracy ,recall_score,{"penalty":penalty_type,
+                                             "solver":solver_type,
+                                             "max_iterations":max_iterations,
+                                             "prediction_threshold" : pred_threshold} ]    
+    
+
+
+ 
+
+def model_xgboost(objective_xgb , colsample_bytree , l_rate, maximum_depth , alpha_reg , n_estimators_tree , X_train_xgb, Y_train_xgb, X_val_xgb, Y_val_xgb, pred_threshold, model_id ):
+    xgb_model = XGBClassifier(objective = objective_xgb, colsample_bytree = colsample_bytree, learning_rate = l_rate,
+                max_depth = maximum_depth, reg_alpha = alpha_reg, n_estimators = n_estimators_tree, seed=27)
+    
+    xgb_model.fit(X_train_xgb,Y_train_xgb)
+    
+    predictions = xgb_model.predict(X_val_xgb)
+    predictions[predictions >= pred_threshold] = 1
+    predictions[predictions <  pred_threshold] = 0
+     
+    recall_score = sklearn.metrics.recall_score(Y_val_xgb,predictions)
+    accuracy = sklearn.metrics.accuracy_score(Y_val_xgb,predictions)
+    pickling_model(model_id,xgb_model,model_write_path)
+    
+    return [model_id,accuracy ,recall_score,{"objective":objective_xgb,
+                                             "colsample_bytree":colsample_bytree,
+                                             "learning_rate":l_rate,
+                                             "max_depth" : maximum_depth,
+                                             "alpha" : alpha_reg,
+                                             "n_estimators" : n_estimators_tree,
+                                             "prediction_threshold" : pred_threshold} ]    
+    
+
+def result_prediction(Best_model, X_test_model, Y_test_model):
+    ## predicting using the best model
+    
+    with open(model_write_path+"/"+Best_model['Model_Name']+".sav", 'rb') as file:  
+        best_model = pickle.load(file)
+    
+    
+    
+    if 'xgb' in Best_model['Model_Name'].lower():
+        predictions = best_model.predict(X_test_model)
+        predictions_prob = best_model.predict_proba(X_test_model)[:,1]
+    elif 'log' in Best_model['Model_Name'].lower():
+        predictions = best_model.predict(X_test_model)
+        predictions_prob = best_model.predict_proba(X_test_model)[:,1]
+    else:
+        predictions = best_model.predict(X_test_model)
+        predictions_prob = predictions.copy()
+        predictions[predictions >= Best_model['Parameters']['prediction_threshold']] = 1
+        predictions[predictions <  Best_model['Parameters']['prediction_threshold']] = 0
+    
+    pred_df = pd.DataFrame({'Actual' : Y_test,'Predicted' : predictions,'Predicted_prob' :predictions_prob })
+    
+    ##
+    pred_label = 1
+    other_label = 1 - pred_label
+    recall_score = sklearn.metrics.recall_score(Y_test_model,predictions,pos_label=pred_label)
+    accuracy = sklearn.metrics.accuracy_score(Y_test_model,predictions)
+    true_positive = pred_df[pred_df['Actual'] == pred_label] [pred_df['Predicted'] == pred_label]
+    true_positive = true_positive.shape[0]
+    true_negative= pred_df[pred_df['Actual'] == other_label] [pred_df['Predicted'] == other_label]
+    true_negative = true_negative.shape[0]
+    false_positive = pred_df[pred_df['Actual'] == other_label] [pred_df['Predicted'] == pred_label]
+    false_positive = false_positive.shape[0]
+    false_negative = pred_df[pred_df['Actual'] == pred_label] [pred_df['Predicted'] == other_label]
+    false_negative = false_negative.shape[0]    
+    
+    
+
+    precision = true_positive / (true_positive + false_positive) * 100
+    accuracy = (true_positive + true_negative) / (true_positive + true_negative + false_positive + false_negative) * 100
+    recall = true_positive / (true_positive + false_negative) * 100
+    specificity = true_negative / (true_negative + false_positive) * 100
+    
+    true_positive_percent = true_positive / (len(Y_test)) * 100
+    true_negative_percent = true_negative / (len(Y_test)) * 100
+    false_positive_percent = false_positive / (len(Y_test)) * 100
+    false_negative_percent = false_negative / (len(Y_test)) * 100
+    
+    ## Model_performance  
+    Model_Performance = pd.DataFrame({'Field':['Accuracy', 'Sensitivity', 'Specificity',
+                                               'True Positive', 'True Negative','False Positive' ,'False Negative',
+                                               'True Postive Percent','True Negative Percent','False Negative Percent','False Positive Percent'] ,
+                                      'Value': [accuracy, recall, specificity,
+                                                true_positive, true_negative , false_positive, false_negative, 
+                                                true_positive_percent,true_negative_percent, false_positive_percent, false_negative_percent ] 
+                                      })
+    
+    ## Lift chart
+    pred_df2 = pred_df.copy()
+    pred_df2 = pred_df2.sort_values(by = 'Predicted_prob',ascending = False)
+    
+    Lift_data = []
+    Lift_data.append([0, 0 , 0, 0])
+    cum_val = 0
+    decile_cut = math.ceil(pred_df2.shape[0]/10)
+    pred_df2['Decile'] = 'D'
+    start_ind = 0
+    total_values = true_positive + false_negative
+    for index_itr in range(10):
+        end_ind = min ( start_ind + decile_cut , pred_df2.shape[0] )
+        decile_val = 'D'+str(index_itr+1)
+        pred_df2['Decile'].iloc[start_ind:end_ind] = decile_val
+        start_ind = end_ind
+        cum_val_df = pred_df2[pred_df2['Actual'] == pred_label][pred_df2['Decile'] == decile_val]
+        cum_val =cum_val + cum_val_df.shape[0]
+        
+        Lift_data.append(['D'+str(index_itr+1), (index_itr+1)*10 ,  cum_val, (cum_val/ total_values) * 100])
+     
+    Lift_chart = pd.DataFrame(Lift_data,columns = ['Decile','Cumulative_Base_Value','Cumulative_Model_Value','Cumulative_Lift'])    
+    
+    ## variable importance
+    data_imp_features = pd.DataFrame()
+    if 'xgb' in Best_model['Model_Name'].lower():
+        feature_important = best_model.get_booster().get_score(importance_type='weight')
+        keys = list(feature_important.keys())
+        values = list(feature_important.values())
+        data_imp_features = pd.DataFrame(data=values, index=keys, columns=["score"]).sort_values(by = "score", ascending=False)
+
+    if 'random_forest' in Best_model['Model_Name'].lower():
+        feats = {} # a dict to hold feature_name: feature_importance
+        for feature, importance in zip(X_test_model.columns, best_model.feature_importances_):
+            feats[feature] = importance #add the name/value pair        
+        data_imp_features = pd.DataFrame.from_dict(feats, orient='index').rename(columns={0: 'score'})
+        data_imp_features = data_imp_features.sort_values(by = "score", ascending=False)
+        data_imp_features = data_imp_features[data_imp_features['score'] > 0.01]
+        
+    if 'log' in Best_model['Model_Name'].lower():
+        feats = {}
+        for feature, importance in zip(X_test_model.columns, best_model.coef_[0]):
+            feats[feature] = importance
+        data_imp_features = pd.DataFrame.from_dict(feats, orient='index').rename(columns={0: 'score'})
+        data_imp_features['score'] =  data_imp_features['score'].abs()
+        data_imp_features = data_imp_features.sort_values(by = "score", ascending=False)
+        data_imp_features = data_imp_features.head(20)
+        
+    return Model_Performance , Lift_chart, data_imp_features            
+    
+if __name__ == '__main__':
+    import pandas as pd
+    import random
+    import numpy as np
+    import math
+    import numpy as np
+    import matplotlib.pyplot as plt 
+    import pandas as pd  
+    import seaborn as sns 
+    from sklearn import metrics
+    import sklearn
+    from sklearn.ensemble import RandomForestRegressor
+    import pickle    
+    from pprint import pprint 
+    from sklearn.linear_model import LogisticRegression
+    from xgboost import XGBClassifier
+    import joblib
+
+    
+    
+    #### taking inputs for modelling
+    path = 'C:/Users/adhiman/Desktop/CVM/ML Models/Bad_Debt_28012021/mov_20210128.csv'
+    
+    model_run_type = 'demo' 
+    #model_run_type = 'full' 
+    model_write_path = "C:/Users/adhiman/Desktop/CVM/ML Ashmita Models/Output 02022021"       
+    model_selection_criteria = "Accuracy" # "Sensitivity" is other option
+    prediction_month = '202006'
+    
+
+    target_variable = "OVERALL_CHURN_PM1"
+          
+    
+    feature_selection_path = 'C:/Users/adhiman/Desktop/CVM/ML Ashmita Models/MOV_Variable_Selection_Renewal/MOV_Variable_Selection_Renewal_02022021_1838_Kallol_Input.csv'
+
+    rf_parameters = {'n_estimators_list':[50,100,150],
+                 'min_sample_split_list' : [5,10,15],
+                 'criterion_list' : ["mse"],
+                 'max_features_list' : ['sqrt'],
+                 'prediction_threshold_list' : [0.5]
+                 }
+
+    logistic_parameters = {'penalty_list': ['l2'],
+                       'solver_list' : ['newton-cg', 'lbfgs', 'liblinear'],
+                       'max_iter_list' : [100,200],
+                       'prediction_threshold_list' : [0.5]
+                       }
+    
+    xgboost_parameters = {'objective_list': ['binary:logistic'],
+                       'colsample_bytree_list' : [0.3,0.5,0.7],
+                       'learning_rate_list' : [0.1],
+                       'max_depth_list' : [5],
+                       'n_estimators_list' : [10,100,200],
+                       'alpha_list' : [0.05,0.01],
+                       'prediction_threshold_list' : [0.5]
+                       }   
+    
+    MOV = dataset_read(path)
+
+
+        
+    
+    ## feature engineering and selection
+    MOV_df = feature_selection(MOV, feature_selection_path)
+
+    
+    #data alteration
+    MOV_df = data_alteration(MOV_df)
+    
+    ##subsetting renewal month
+    MOV_df = MOV_df[MOV_df['RENEWAL_MONTH'] == 202006]
+    MOV_df = MOV_df[MOV_df['HANDSET_BUNDLE_FLAG'] == 1]       
+
+    ## data imputation  , add condition of nrows > 0
+    MOV_df = impute_missing_value(MOV_df, target_variable)
+    
+    ## event_rate
+    event_rate = MOV_df[target_variable].value_counts()[1] / sum(MOV_df[target_variable].value_counts())
+    event_rate = event_rate * 100
+    print(event_rate)
+    
+    
+    ## divide test-train
+    X_train,Y_train, X_val, Y_val,  X_test, Y_test = divide_test_train(MOV_df, target_variable,0.7,0.05)
+    
+    ### Training Multple Models
+    
+    ## Training Random Forest models with multiple set of hyperparameters
+    model_run_info = []
+    model_count = 0 
+    for i in rf_parameters['n_estimators_list']:
+        for j in rf_parameters['min_sample_split_list']:
+            for k in rf_parameters['criterion_list']:
+                for l in rf_parameters['max_features_list']:
+                    for n in rf_parameters['prediction_threshold_list']:
+                        model_count = model_count + 1
+                        mod_id = 'Random_Forest_'+str(model_count)
+                        model_run_info.append(model_run_random_forest(n_estimator = i,min_sam_split = j,
+                                                                      criterion_eval = k, max_features_taken = l,
+                                                                      X_train_rf = X_train, Y_train_rf = Y_train, 
+                                                                      X_val_rf = X_val, Y_val_rf =  Y_val,
+                                                                      pred_threshold = n, model_id = mod_id ))
+
+    ## Training Logistic Regression models with multiple set of hyperparameters
+    for i in logistic_parameters['penalty_list']:
+        for j in logistic_parameters['solver_list']:
+            for k in logistic_parameters['max_iter_list']:
+                for n in logistic_parameters['prediction_threshold_list']:
+                    model_count = model_count + 1
+                    mod_id = 'Logistic_Regression_'+str(model_count)
+                    model_run_info.append(model_run_LogisticRegression(penalty_type = i,solver_type = j,
+                                                                      max_iterations = k, 
+                                                                      X_train_log = X_train, Y_train_log = Y_train, 
+                                                                      X_val_log = X_val, Y_val_log =  Y_val,
+                                                                      pred_threshold = n, model_id = mod_id ))
+
+
+    ## Training  xg-boost models with multiple set of hyperparameters
+    for i  in xgboost_parameters['objective_list']:
+        for j in xgboost_parameters['colsample_bytree_list']:
+            for k in xgboost_parameters['learning_rate_list']:
+                for l in xgboost_parameters['max_depth_list']:
+                    for m in xgboost_parameters['alpha_list']:
+                        for n in xgboost_parameters['n_estimators_list']:
+                            for o in xgboost_parameters['prediction_threshold_list']:
+                                model_count = model_count + 1
+                                mod_id = 'XGBoost_'+str(model_count)
+                                model_run_info.append(model_xgboost(objective_xgb = i,colsample_bytree = j,
+                                                                      l_rate = k, maximum_depth = l, 
+                                                                      alpha_reg = m , n_estimators_tree = n,
+                                                                      X_train_xgb = X_train, Y_train_xgb = Y_train, 
+                                                                      X_val_xgb = X_val, Y_val_xgb =  Y_val,
+                                                                      pred_threshold = o, model_id = mod_id ))
+
+                            
+
+    ## Selecting best model
+    Model_run_info_df = pd.DataFrame(model_run_info,columns = ["Model_Name", "Accuracy", "Sensitivity","Parameters"])  
+    Model_run_info_df['Algorithm']=Model_run_info_df['Model_Name'].apply(lambda x: x.rstrip('0123456789'))
+    if model_selection_criteria == "Accuracy":
+        idx = Model_run_info_df.groupby(['Algorithm'])['Accuracy'].transform(max) == Model_run_info_df['Accuracy']  
+        Best_model = Model_run_info_df[idx]
+    elif model_selection_criteria == "Sensitivity":
+        idx = Model_run_info_df.groupby(['Algorithm'])['Sensitivity'].transform(max) == Model_run_info_df['Sensitivity']  
+        Best_model = Model_run_info_df[idx]     
+    #print(Best_model) ## save the record of best model
+ 
+    #print(Best_model) ## save the record of best model
+    Model_run_info_df['Best Model'] = 'No'
+    Best_model = Best_model.groupby(['Algorithm']).nth(0).reset_index()
+    for best_model_name in Best_model['Model_Name']:
+        #print(best_model_name)
+        Model_run_info_df['Best Model'][Model_run_info_df['Model_Name'] ==best_model_name] ='Yes'
+    Best_model = pd.DataFrame(Best_model).T
+    
+    ## Best model's performace
+    #Model_Perfromance_df , Lift_Chart_df = result_prediction(Best_model, X_test, Y_test)
+
+        
+    
+    ## Best model's performace
+    for i in range(Best_model.shape[1]):
+        Model_Perfromance_df , Lift_Chart_df, Variable_Importance = result_prediction(Best_model[i], X_test, Y_test)
+    
+        
+        writer = pd.ExcelWriter(model_write_path+'/Renewal_Model_'+Best_model[i]['Algorithm']+'.xlsx', engine='xlsxwriter')
+
+        Model_run_info_df.to_excel(writer, sheet_name='Model_Run_Log',index = False)
+
+        Model_Perfromance_df.to_excel(writer, sheet_name='Best_Model_Performance',index= False)
+
+        Lift_Chart_df.to_excel(writer, sheet_name='Lift_Chart', index = False)
+    
+        Variable_Importance.to_excel(writer, sheet_name='Variable_Importance', index = True)
+        
+        writer.save()
+        
+

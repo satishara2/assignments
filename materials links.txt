@@ -1,0 +1,34 @@
+Python Basics:
+
+https://drive.google.com/drive/folders/1hncvY0uMTuxHokzuBxjo09snGAbMK4oG?usp=sharing
+
+ 
+
+Data Science Material:
+
+https://drive.google.com/drive/folders/1hncvY0uMTuxHokzuBxjo09snGAbMK4oG?usp=sharing
+
+ 
+
+Daily session colab Notebooks:
+
+https://drive.google.com/drive/folders/1xWghfacpl7Fz83tKi0ViPKQBokoOFUf6?usp=sharing
+
+ 
+
+Recordings:
+
+https://drive.google.com/drive/folders/1uC0lhzcHwFccsyu8ywN79-kDdq6YGdkG?usp=sharing
+
+ 
+
+Github:
+
+Hemanthkaruturi (Hemanth) (github.com)
+
+ 
+
+Data Science Handbook:
+
+https://jakevdp.github.io/PythonDataScienceHandbook/
+
